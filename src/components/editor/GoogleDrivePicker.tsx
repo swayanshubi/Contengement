@@ -37,7 +37,7 @@ export default function GoogleDrivePicker({
     const tokenClientRef = useRef<any>(null);
     const accessTokenRef = useRef<string>("");
 
-    const isConfigured = CLIENT_ID && API_KEY && APP_ID;
+    const isConfigured = Boolean(CLIENT_ID && (API_KEY || APP_ID));
 
     // Load GAPI (Picker)
     useEffect(() => {
@@ -84,10 +84,20 @@ export default function GoogleDrivePicker({
                 .setIncludeFolders(true)
                 .setSelectFolderEnabled(false);
 
-            const picker = new window.google.picker.PickerBuilder()
-                .setAppId(APP_ID)
+            let pickerBuilder = new window.google.picker.PickerBuilder();
+
+            // App ID is optional for many picker configurations. Keep it opt-in so
+            // Drive import still works when only API key + OAuth client are provided.
+            if (APP_ID) {
+                pickerBuilder = pickerBuilder.setAppId(APP_ID);
+            }
+
+            if (API_KEY) {
+                pickerBuilder = pickerBuilder.setDeveloperKey(API_KEY);
+            }
+
+            const picker = pickerBuilder
                 .setOAuthToken(token)
-                .setDeveloperKey(API_KEY)
                 .addView(view)
                 .addView(
                     new window.google.picker.DocsView(
@@ -137,7 +147,7 @@ export default function GoogleDrivePicker({
                 disabled
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg
                            border border-border/30 text-zinc-600 text-xs cursor-not-allowed"
-                title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID, NEXT_PUBLIC_GOOGLE_API_KEY, and NEXT_PUBLIC_GOOGLE_APP_ID in .env.local"
+                title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID plus either NEXT_PUBLIC_GOOGLE_API_KEY or NEXT_PUBLIC_GOOGLE_APP_ID in .env.local"
             >
                 <HardDrive className="w-3.5 h-3.5" />
                 Google Drive (Not configured)
