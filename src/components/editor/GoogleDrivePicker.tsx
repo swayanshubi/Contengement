@@ -37,6 +37,7 @@ export default function GoogleDrivePicker({
     const tokenClientRef = useRef<any>(null);
     const accessTokenRef = useRef<string>("");
 
+    const isConfigured = Boolean(CLIENT_ID && (API_KEY || APP_ID));
     const isConfigured = CLIENT_ID && API_KEY;
 
     // Load GAPI (Picker)
@@ -92,9 +93,12 @@ export default function GoogleDrivePicker({
                 pickerBuilder = pickerBuilder.setAppId(APP_ID);
             }
 
+            if (API_KEY) {
+                pickerBuilder = pickerBuilder.setDeveloperKey(API_KEY);
+            }
+
             const picker = pickerBuilder
                 .setOAuthToken(token)
-                .setDeveloperKey(API_KEY)
                 .addView(view)
                 .addView(
                     new window.google.picker.DocsView(
@@ -144,6 +148,7 @@ export default function GoogleDrivePicker({
                 disabled
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg
                            border border-border/30 text-zinc-600 text-xs cursor-not-allowed"
+                title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID plus either NEXT_PUBLIC_GOOGLE_API_KEY or NEXT_PUBLIC_GOOGLE_APP_ID in .env.local"
                 title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID and NEXT_PUBLIC_GOOGLE_API_KEY in .env.local (NEXT_PUBLIC_GOOGLE_APP_ID is optional)"
             >
                 <HardDrive className="w-3.5 h-3.5" />
