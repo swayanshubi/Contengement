@@ -22,10 +22,15 @@ declare global {
     }
 }
 
-const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || "";
-const APP_ID = process.env.NEXT_PUBLIC_GOOGLE_APP_ID || "";
+const CLIENT_ID = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "").trim();
+const API_KEY = (process.env.NEXT_PUBLIC_GOOGLE_API_KEY || "").trim();
+const APP_ID = (process.env.NEXT_PUBLIC_GOOGLE_APP_ID || "").trim();
 const SCOPES = "https://www.googleapis.com/auth/drive.readonly";
+
+const isPlaceholder = (value: string) =>
+    !value ||
+    value.startsWith("your-") ||
+    value.includes("placeholder");
 
 export default function GoogleDrivePicker({
     onFilesPicked,
@@ -37,7 +42,11 @@ export default function GoogleDrivePicker({
     const tokenClientRef = useRef<any>(null);
     const accessTokenRef = useRef<string>("");
 
-    const isConfigured = CLIENT_ID && API_KEY && APP_ID;
+    const isConfigured =
+        !isPlaceholder(CLIENT_ID) &&
+        !isPlaceholder(API_KEY) &&
+        CLIENT_ID.endsWith(".apps.googleusercontent.com") &&
+        API_KEY.startsWith("AIza");
 
     // Load GAPI (Picker)
     useEffect(() => {
@@ -67,7 +76,10 @@ export default function GoogleDrivePicker({
                         accessTokenRef.current = response.access_token;
                         (window as any).__driveAccessToken = response.access_token;
                         openPicker(response.access_token);
+                        return;
                     }
+                    setLoading(false);
+                    console.error("Google Drive auth failed:", response);
                 },
             });
             setGisLoaded(true);
@@ -84,8 +96,7 @@ export default function GoogleDrivePicker({
                 .setIncludeFolders(true)
                 .setSelectFolderEnabled(false);
 
-            const picker = new window.google.picker.PickerBuilder()
-                .setAppId(APP_ID)
+            let pickerBuilder = new window.google.picker.PickerBuilder()
                 .setOAuthToken(token)
                 .setDeveloperKey(API_KEY)
                 .addView(view)
@@ -112,9 +123,13 @@ export default function GoogleDrivePicker({
                     setLoading(false);
                 })
                 .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
-                .setTitle("Select files from Google Drive")
-                .build();
+                .setTitle("Select files from Google Drive");
 
+            if (APP_ID && !isPlaceholder(APP_ID)) {
+                pickerBuilder = pickerBuilder.setAppId(APP_ID);
+            }
+
+            const picker = pickerBuilder.build();
             picker.setVisible(true);
         },
         [onFilesPicked]
@@ -137,7 +152,7 @@ export default function GoogleDrivePicker({
                 disabled
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg
                            border border-border/30 text-zinc-600 text-xs cursor-not-allowed"
-                title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID, NEXT_PUBLIC_GOOGLE_API_KEY, and NEXT_PUBLIC_GOOGLE_APP_ID in .env.local"
+                title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID and NEXT_PUBLIC_GOOGLE_API_KEY in .env.local"
             >
                 <HardDrive className="w-3.5 h-3.5" />
                 Google Drive (Not configured)
