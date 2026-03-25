@@ -1,26 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, FileText, PanelRightClose, PanelRightOpen } from "lucide-react";
 import type { ProjectData, Scene } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import LeftPanel from "@/components/editor/LeftPanel";
-import MiddlePanel from "@/components/editor/MiddlePanel";
-import RightPanel from "@/components/editor/RightPanel";
-import StoryboardView from "@/components/editor/StoryboardView";
-import ShotListView from "@/components/editor/ShotListView";
 import CompiledScriptModal from "@/components/editor/CompiledScriptModal";
-import {
-    ArrowLeft,
-    PanelRightOpen,
-    PanelRightClose,
-    FileText,
-    LayoutTemplate,
-    Rows4,
-    PenSquare,
-} from "lucide-react";
+import LeftPanel from "@/components/editor/LeftPanel";
+import MasterScriptView from "@/components/editor/MasterScriptView";
+import MiddlePanel from "@/components/editor/MiddlePanel";
+import ProjectNotesView from "@/components/editor/ProjectNotesView";
+import ProjectNavRail from "@/components/editor/ProjectNavRail";
+import RightPanel from "@/components/editor/RightPanel";
+import ShotListView from "@/components/editor/ShotListView";
+import StoryboardView from "@/components/editor/StoryboardView";
 
-type EditorView = "scene" | "storyboard" | "shot-list";
+type EditorView = "scene" | "storyboard" | "shot-list" | "master-script" | "notes";
 
 export default function ProjectEditorPage() {
     const params = useParams();
@@ -46,9 +41,10 @@ export default function ProjectEditorPage() {
             router.push("/");
             return;
         }
-        const d: ProjectData = await res.json();
-        d.scenes.sort((a, b) => a.sortOrder - b.sortOrder);
-        setData(d);
+
+        const nextData: ProjectData = await res.json();
+        nextData.scenes.sort((a, b) => a.sortOrder - b.sortOrder);
+        setData(nextData);
         setLoading(false);
     }, [projectId, router]);
 
@@ -56,14 +52,28 @@ export default function ProjectEditorPage() {
         fetchData();
     }, [fetchData]);
 
-    // ─── Scene CRUD ───
     async function addScene() {
-        await fetch(`/api/projects/${projectId}/scenes`, {
+        const res = await fetch(`/api/projects/${projectId}/scenes`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
         });
-        await fetchData();
+
+        if (!res.ok) {
+            await fetchData();
+            return;
+        }
+
+        const created: Scene = await res.json();
+        setData((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                scenes: [...prev.scenes, created].sort((a, b) => a.sortOrder - b.sortOrder),
+                project: { ...prev.project, updatedAt: new Date().toISOString() },
+            };
+        });
+        selectScene(created.id);
     }
 
     async function updateScene(sceneId: string, updates: Partial<Scene>) {
@@ -106,187 +116,293 @@ export default function ProjectEditorPage() {
     }
 
     async function removeScene(sceneId: string) {
-        await fetch(`/api/projects/${projectId}/scenes/${sceneId}`, {
+        const previousData = data;
+        setData((prev) => {
+            if (!prev) return prev;
+            const scenes = prev.scenes
+                .filter((scene) => scene.id !== sceneId)
+                .map((scene, index) => ({ ...scene, sortOrder: index }));
+
+            return {
+                ...prev,
+                scenes,
+                project: { ...prev.project, updatedAt: new Date().toISOString() },
+            };
+        });
+
+        const res = await fetch(`/api/projects/${projectId}/scenes/${sceneId}`, {
             method: "DELETE",
         });
-        if (selectedSceneId === sceneId) selectScene(null);
-        await fetchData();
+
+        if (!res.ok) {
+            setData(previousData);
+            await fetchData();
+            return;
+        }
+
+        if (selectedSceneId === sceneId) {
+            selectScene(null);
+        }
     }
 
     async function moveScene(sceneId: string, direction: "up" | "down") {
         if (!data) return;
+
         const scenes = [...data.scenes].sort((a, b) => a.sortOrder - b.sortOrder);
-        const idx = scenes.findIndex((s) => s.id === sceneId);
-        if (idx < 0) return;
-        if (direction === "up" && idx === 0) return;
-        if (direction === "down" && idx === scenes.length - 1) return;
+        const index = scenes.findIndex((scene) => scene.id === sceneId);
+        if (index < 0) return;
+        if (direction === "up" && index === 0) return;
+        if (direction === "down" && index === scenes.length - 1) return;
 
-        const newIdx = direction === "up" ? idx - 1 : idx + 1;
-        [scenes[idx], scenes[newIdx]] = [scenes[newIdx], scenes[idx]];
+        const nextIndex = direction === "up" ? index - 1 : index + 1;
+        [scenes[index], scenes[nextIndex]] = [scenes[nextIndex], scenes[index]];
 
-        await reorderScenesByIds(scenes.map((s) => s.id));
+        await reorderScenesByIds(scenes.map((scene) => scene.id));
     }
 
     async function reorderScenesByIds(orderedIds: string[]) {
-        await fetch(`/api/projects/${projectId}/scenes/reorder`, {
+        const previousData = data;
+        setData((prev) => {
+            if (!prev) return prev;
+            const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
+            const nextScenes = prev.scenes
+                .map((scene) => ({
+                    ...scene,
+                    sortOrder: orderMap.get(scene.id) ?? scene.sortOrder,
+                }))
+                .sort((a, b) => a.sortOrder - b.sortOrder);
+
+            return {
+                ...prev,
+                scenes: nextScenes,
+            };
+        });
+
+        const res = await fetch(`/api/projects/${projectId}/scenes/reorder`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ orderedIds }),
         });
-        await fetchData();
+
+        if (!res.ok) {
+            setData(previousData);
+            await fetchData();
+            return;
+        }
+
+        const updatedScenes: Scene[] = await res.json();
+        setData((prev) => (prev ? { ...prev, scenes: updatedScenes } : prev));
     }
 
     async function updateProject(updates: Record<string, unknown>) {
-        await fetch(`/api/projects/${projectId}`, {
+        const previousData = data;
+        setData((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                project: {
+                    ...prev.project,
+                    ...updates,
+                    updatedAt: new Date().toISOString(),
+                },
+            };
+        });
+
+        const res = await fetch(`/api/projects/${projectId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(updates),
         });
-        await fetchData();
+
+        if (!res.ok) {
+            setData(previousData);
+            await fetchData();
+            return;
+        }
+
+        const project = await res.json();
+        setData((prev) => (prev ? { ...prev, project } : prev));
     }
 
     async function linkAsset(assetId: string, sceneId: string) {
-        await fetch(`/api/projects/${projectId}/assets/link`, {
+        const previousData = data;
+        setData((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                assets: prev.assets.map((asset) =>
+                    asset.id === assetId && !asset.sceneIds.includes(sceneId)
+                        ? { ...asset, sceneIds: [...asset.sceneIds, sceneId] }
+                        : asset
+                ),
+            };
+        });
+
+        const res = await fetch(`/api/projects/${projectId}/assets/link`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ assetId, sceneId, action: "link" }),
         });
-        await fetchData();
+
+        if (!res.ok) {
+            setData(previousData);
+            await fetchData();
+        }
     }
 
     async function unlinkAsset(assetId: string, sceneId: string) {
-        await fetch(`/api/projects/${projectId}/assets/link`, {
+        const previousData = data;
+        setData((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                assets: prev.assets.map((asset) =>
+                    asset.id === assetId
+                        ? { ...asset, sceneIds: asset.sceneIds.filter((id) => id !== sceneId) }
+                        : asset
+                ),
+            };
+        });
+
+        const res = await fetch(`/api/projects/${projectId}/assets/link`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ assetId, sceneId, action: "unlink" }),
         });
+
+        if (!res.ok) {
+            setData(previousData);
+            await fetchData();
+        }
+    }
+
+    async function createSceneFromMasterScript(input: {
+        title: string;
+        scriptBody: string;
+    }) {
+        const res = await fetch(`/api/projects/${projectId}/scenes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title: input.title,
+                scriptBody: input.scriptBody,
+                status: "scripted",
+            }),
+        });
+
+        if (!res.ok) {
+            await fetchData();
+            return;
+        }
         await fetchData();
     }
 
-    const storyboardEnabled = Boolean(data?.project.storyboardEnabled);
-
-    useEffect(() => {
-        if (!storyboardEnabled) setEditorView("scene");
-    }, [storyboardEnabled]);
-
     if (loading || !data) {
         return (
-            <div className="h-screen flex items-center justify-center bg-[var(--bg-primary)]">
-                <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+            <div className="flex h-full items-center justify-center bg-[var(--bg-primary)]">
+                <div className="h-6 w-6 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
             </div>
         );
     }
 
-    const selectedScene = data.scenes.find((s) => s.id === selectedSceneId) || null;
+    const selectedScene = data.scenes.find((scene) => scene.id === selectedSceneId) || null;
 
     return (
-        <div className="h-screen flex flex-col bg-[var(--bg-primary)] overflow-hidden">
-            {/* ─── Top Bar ─── */}
-            <header className="h-12 border-b border-border/50 flex items-center px-4 gap-3 shrink-0">
+        <div className="flex h-full flex-col overflow-hidden bg-[var(--bg-primary)]">
+            <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border/50 bg-gradient-to-r from-zinc-950 via-zinc-950 to-zinc-900/80 px-4">
                 <button
                     onClick={() => router.push("/")}
                     className="btn-ghost flex items-center gap-1.5 text-sm"
                 >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="h-4 w-4" />
                     <span className="hidden sm:inline">Dashboard</span>
                 </button>
 
                 <div className="h-5 w-px bg-border/60" />
 
-                <h1 className="text-sm font-semibold text-zinc-200 truncate flex-1">
-                    {data.project.title}
-                </h1>
-
-                <button
-                    onClick={() => setCompiledScriptOpen(true)}
-                    className="btn-ghost flex items-center gap-1.5 text-xs"
-                >
-                    <FileText className="w-3.5 h-3.5" />
-                    Full Script
-                </button>
-
-                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-surface-elevated/60 border border-border/40 overflow-x-auto">
-                    <button
-                        onClick={() => setEditorView("scene")}
-                        className={`btn-ghost text-[11px] px-2 py-1 flex items-center gap-1 ${editorView === "scene" ? "bg-accent/15 text-accent" : ""
-                            }`}
-                    >
-                        <PenSquare className="w-3 h-3" />
-                        Scene
-                    </button>
-                    {storyboardEnabled && (
-                        <>
-                            <button
-                                onClick={() => setEditorView("storyboard")}
-                                className={`btn-ghost text-[11px] px-2 py-1 flex items-center gap-1 ${editorView === "storyboard"
-                                    ? "bg-accent/15 text-accent"
-                                    : ""
-                                    }`}
-                            >
-                                <LayoutTemplate className="w-3 h-3" />
-                                Storyboard
-                            </button>
-                            <button
-                                onClick={() => setEditorView("shot-list")}
-                                className={`btn-ghost text-[11px] px-2 py-1 flex items-center gap-1 ${editorView === "shot-list" ? "bg-accent/15 text-accent" : ""
-                                    }`}
-                            >
-                                <Rows4 className="w-3 h-3" />
-                                Shot List
-                            </button>
-                        </>
-                    )}
+                <div className="min-w-0 flex-1">
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-500">
+                        Project Workspace
+                    </p>
+                    <h1 className="truncate text-sm font-semibold text-zinc-100">
+                        {data.project.title}
+                    </h1>
                 </div>
 
                 <button
-                    onClick={() =>
-                        updateProject({ storyboardEnabled: !storyboardEnabled })
-                    }
-                    className={`btn-ghost text-[11px] ${storyboardEnabled ? "text-accent" : "text-zinc-400"}`}
-                    title="Enable or disable storyboard module"
+                    onClick={() => setCompiledScriptOpen(true)}
+                    className="btn-ghost flex items-center gap-1 text-xs"
                 >
-                    {storyboardEnabled ? "Storyboard On" : "Storyboard Off"}
+                    <FileText className="h-3.5 w-3.5" />
+                    Script
                 </button>
 
                 <button onClick={toggleRightPanel} className="btn-ghost p-1.5">
                     {rightPanelOpen ? (
-                        <PanelRightClose className="w-4 h-4" />
+                        <PanelRightClose className="h-4 w-4" />
                     ) : (
-                        <PanelRightOpen className="w-4 h-4" />
+                        <PanelRightOpen className="h-4 w-4" />
                     )}
                 </button>
             </header>
 
-            {/* ─── 3-Panel Layout ─── */}
-            <div className="flex-1 flex overflow-hidden">
-                <LeftPanel
-                    project={data.project}
-                    scenes={data.scenes}
-                    selectedSceneId={selectedSceneId}
-                    onSelectScene={selectScene}
-                    onAddScene={addScene}
-                    onRemoveScene={removeScene}
-                    onMoveScene={moveScene}
-                    onUpdateProject={updateProject}
-                />
+            <div className="relative flex flex-1 overflow-hidden">
+                <div className="project-rail-group pointer-events-none absolute inset-y-0 left-0 z-40 flex">
+                    <div className="project-rail-edge pointer-events-auto h-full w-5" />
+                    <div className="project-rail-shell pointer-events-auto my-3 h-[calc(100%-1.5rem)]">
+                        <ProjectNavRail
+                            projectTitle={data.project.title}
+                            editorView={editorView}
+                            onChangeView={setEditorView}
+                            onOpenScript={() => setCompiledScriptOpen(true)}
+                        />
+                    </div>
+                </div>
+
+                {editorView !== "storyboard" && editorView !== "master-script" && editorView !== "notes" && (
+                    <LeftPanel
+                        project={data.project}
+                        scenes={data.scenes}
+                        selectedSceneId={selectedSceneId}
+                        onSelectScene={selectScene}
+                        onAddScene={addScene}
+                        onRemoveScene={removeScene}
+                        onMoveScene={moveScene}
+                        onUpdateProject={updateProject}
+                    />
+                )}
 
                 {editorView === "scene" && (
                     <MiddlePanel
                         scene={selectedScene}
                         assets={data.assets}
                         onUpdate={(updates) => {
-                            if (selectedScene) updateScene(selectedScene.id, updates);
+                            if (selectedScene) {
+                                updateScene(selectedScene.id, updates);
+                            }
                         }}
                         onLinkAsset={(assetId) => {
-                            if (selectedScene) linkAsset(assetId, selectedScene.id);
+                            if (selectedScene) {
+                                linkAsset(assetId, selectedScene.id);
+                            }
                         }}
                         onUnlinkAsset={(assetId) => {
-                            if (selectedScene) unlinkAsset(assetId, selectedScene.id);
+                            if (selectedScene) {
+                                unlinkAsset(assetId, selectedScene.id);
+                            }
                         }}
                     />
                 )}
 
-                {editorView === "storyboard" && storyboardEnabled && (
+                {editorView === "shot-list" && (
+                    <ShotListView
+                        project={data.project}
+                        scenes={data.scenes}
+                        onUpdateScene={updateScene}
+                    />
+                )}
+
+                {editorView === "storyboard" && (
                     <StoryboardView
                         project={data.project}
                         scenes={data.scenes}
@@ -297,11 +413,19 @@ export default function ProjectEditorPage() {
                     />
                 )}
 
-                {editorView === "shot-list" && storyboardEnabled && (
-                    <ShotListView
+                {editorView === "master-script" && (
+                    <MasterScriptView
                         project={data.project}
                         scenes={data.scenes}
-                        onUpdateScene={updateScene}
+                        onUpdateProject={updateProject}
+                        onCreateSceneFromScript={createSceneFromMasterScript}
+                    />
+                )}
+
+                {editorView === "notes" && (
+                    <ProjectNotesView
+                        project={data.project}
+                        onUpdateProject={updateProject}
                     />
                 )}
 
@@ -315,7 +439,6 @@ export default function ProjectEditorPage() {
                 )}
             </div>
 
-            {/* ─── Compiled Script Modal ─── */}
             {compiledScriptOpen && (
                 <CompiledScriptModal
                     scenes={data.scenes}

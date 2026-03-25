@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { Project, Scene } from "@/lib/types";
 import { formatDuration, STATUS_COLORS, STATUS_LABELS } from "@/lib/types";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface LeftPanelProps {
     project: Project;
@@ -40,6 +41,7 @@ export default function LeftPanel({
     const [hookOpen, setHookOpen] = useState(true);
     const [editingHook, setEditingHook] = useState(false);
     const [hookText, setHookText] = useState(project.hook || "");
+    const [sceneToDelete, setSceneToDelete] = useState<string | null>(null);
 
     const totalDuration = scenes.reduce(
         (sum, s) => sum + s.estimatedDurationSec,
@@ -49,6 +51,12 @@ export default function LeftPanel({
     function saveHook() {
         onUpdateProject({ hook: hookText });
         setEditingHook(false);
+    }
+
+    function confirmDeleteScene() {
+        if (!sceneToDelete) return;
+        onRemoveScene(sceneToDelete);
+        setSceneToDelete(null);
     }
 
     return (
@@ -183,7 +191,7 @@ export default function LeftPanel({
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if (confirm("Delete this scene?")) onRemoveScene(scene.id);
+                                        setSceneToDelete(scene.id);
                                     }}
                                     className="btn-ghost p-0.5 ml-auto hover:text-red-400"
                                     title="Delete scene"
@@ -206,6 +214,15 @@ export default function LeftPanel({
                     Add Scene
                 </button>
             </div>
+            <ConfirmDialog
+                open={Boolean(sceneToDelete)}
+                title="Delete scene?"
+                message="This scene and its related links will be removed."
+                confirmLabel="Delete"
+                danger
+                onCancel={() => setSceneToDelete(null)}
+                onConfirm={confirmDeleteScene}
+            />
         </aside>
     );
 }

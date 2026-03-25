@@ -85,7 +85,7 @@ export default function MiddlePanel({
         clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
             onUpdate({ [field]: value });
-        }, 600);
+        }, 220);
     }
 
     function handleStatusChange(status: SceneStatus) {
@@ -127,7 +127,7 @@ export default function MiddlePanel({
     function handleAssetDrop(e: React.DragEvent) {
         e.preventDefault();
         setAssetDropActive(false);
-        const raw = e.dataTransfer.getData("application/x-content-os-asset");
+        const raw = e.dataTransfer.getData("application/x-contengement-asset");
         if (!raw) return;
         try {
             const parsed = JSON.parse(raw) as { assetId?: string };

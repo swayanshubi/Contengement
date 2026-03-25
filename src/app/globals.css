@@ -30,6 +30,81 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.app-shell {
+  height: 100vh;
+  min-height: 100vh;
+}
+
+.desktop-app .app-shell {
+  height: 100vh;
+  min-height: 100vh;
+  padding-top: 36px;
+}
+
+.app-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 36px;
+  background: linear-gradient(180deg, #101218 0%, #090b10 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app-titlebar-drag {
+  position: absolute;
+  inset: 0;
+  -webkit-app-region: drag;
+}
+
+.app-titlebar-brand {
+  position: relative;
+  z-index: 1;
+  margin-left: 12px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #c6cad6;
+  pointer-events: none;
+}
+
+.app-titlebar-controls {
+  position: relative;
+  z-index: 1;
+  margin-left: auto;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  width: 46px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #c6cad6;
+  background: transparent;
+  border: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.titlebar-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.titlebar-btn-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -154,4 +229,18 @@ body {
 :focus-visible {
   outline: 2px solid rgba(139, 92, 246, 0.5);
   outline-offset: 2px;
+}
+
+.project-rail-edge {
+  opacity: 0;
+}
+
+.project-rail-shell {
+  transform: translateX(calc(-100% - 8px));
+  transition: transform 220ms ease;
+}
+
+.project-rail-group:hover .project-rail-shell,
+.project-rail-group:focus-within .project-rail-shell {
+  transform: translateX(0);
 }

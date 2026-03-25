@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import DesktopTitleBar from "@/components/shell/DesktopTitleBar";
 
 export const metadata: Metadata = {
-    title: "Content OS — Scene-Based Video Production",
+    title: "Contengement - Content Management",
     description:
-        "A scene-native operating system for serious video creators. Structure, script, and execute your productions.",
+        "Contengement is a content management workspace for planning, structuring, and executing production projects.",
 };
 
 export default function RootLayout({
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" className="dark">
-            <body className="min-h-screen antialiased">{children}</body>
+            <body className="min-h-screen antialiased">
+                <DesktopTitleBar />
+                <div className="app-shell">{children}</div>
+            </body>
         </html>
     );
 }

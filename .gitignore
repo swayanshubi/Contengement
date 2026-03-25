@@ -13,6 +13,7 @@ node_modules/
 
 # production
 /build
+/release
 
 # misc
 .DS_Store
@@ -34,4 +35,4 @@ yarn-error.log*
 next-env.d.ts
 
 # local data store
-.content-os/
+.contengement/

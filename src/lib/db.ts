@@ -3,14 +3,33 @@ import path from "path";
 import type {
     Asset,
     AudioTrack,
+    DrawingLayoutMode,
+    MasterScriptBlock,
+    MasterScriptBlockType,
+    MasterScriptLocationType,
+    MasterScriptModule,
     OverlaySlot,
     OverlaySlotType,
     Project,
     ProjectData,
     Scene,
     StoryboardAspect,
+    StoryboardBlock,
+    StoryboardBlockType,
+    StoryboardGroup,
+    StoryboardLink,
+    StoryboardSelectionArea,
+    StoryboardMode,
+    StoryboardModule,
 } from "./types";
-import { OVERLAY_SLOT_TYPES } from "./types";
+import {
+    DRAWING_LAYOUT_MODES,
+    MASTER_SCRIPT_BLOCK_TYPES,
+    MASTER_SCRIPT_LOCATION_TYPES,
+    OVERLAY_SLOT_TYPES,
+    STORYBOARD_BLOCK_TYPES,
+    STORYBOARD_MODES,
+} from "./types";
 import { ensureStorageReady, getStorageLayout } from "./storage";
 
 const PROJECTS_INDEX_FILE = "projects.json";
@@ -301,6 +320,304 @@ function inferAspectFromTargetPlatform(targetPlatform: string): StoryboardAspect
     return "16:9";
 }
 
+function toStoryboardMode(value: unknown): StoryboardMode {
+    if (typeof value === "string" && STORYBOARD_MODES.includes(value as StoryboardMode)) {
+        return value as StoryboardMode;
+    }
+    return "hybrid";
+}
+
+function toStoryboardBlockType(value: unknown): StoryboardBlockType {
+    if (typeof value === "string" && STORYBOARD_BLOCK_TYPES.includes(value as StoryboardBlockType)) {
+        return value as StoryboardBlockType;
+    }
+    return "scene";
+}
+
+function toDrawingLayoutMode(value: unknown): DrawingLayoutMode {
+    if (typeof value === "string" && DRAWING_LAYOUT_MODES.includes(value as DrawingLayoutMode)) {
+        return value as DrawingLayoutMode;
+    }
+    return "standard";
+}
+
+function toMasterScriptBlockType(value: unknown): MasterScriptBlockType {
+    if (typeof value === "string" && MASTER_SCRIPT_BLOCK_TYPES.includes(value as MasterScriptBlockType)) {
+        return value as MasterScriptBlockType;
+    }
+    return "action";
+}
+
+function toMasterScriptLocationType(value: unknown): MasterScriptLocationType | undefined {
+    if (typeof value === "string" && MASTER_SCRIPT_LOCATION_TYPES.includes(value as MasterScriptLocationType)) {
+        return value as MasterScriptLocationType;
+    }
+    return undefined;
+}
+
+function sanitizeStoryboardBlock(value: unknown, idx: number): StoryboardBlock | null {
+    if (!isRecord(value)) return null;
+    if (typeof value.sceneId !== "string" || !value.sceneId) return null;
+
+    const tags = Array.isArray(value.tags)
+        ? value.tags.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0)
+        : [];
+
+    const brollMarkers = Array.isArray(value.brollMarkers)
+        ? value.brollMarkers.filter(
+            (marker): marker is string => typeof marker === "string" && marker.trim().length > 0
+        )
+        : [];
+
+    const rawAudioRef = isRecord(value.audioRef) ? value.audioRef : null;
+    const startSec = rawAudioRef ? Number(rawAudioRef.startSec) : NaN;
+    const endSec = rawAudioRef ? Number(rawAudioRef.endSec) : NaN;
+    const audioRef =
+        rawAudioRef && (Number.isFinite(startSec) || Number.isFinite(endSec) || typeof rawAudioRef.snapToBeat === "boolean")
+            ? {
+                startSec: Number.isFinite(startSec) ? Math.max(0, startSec) : undefined,
+                endSec: Number.isFinite(endSec) ? Math.max(0, endSec) : undefined,
+                snapToBeat: Boolean(rawAudioRef.snapToBeat),
+            }
+            : undefined;
+
+    const rawShotDetails = isRecord(value.shotDetails) ? value.shotDetails : null;
+    let priority: "must" | "nice" | undefined;
+    if (rawShotDetails?.priority === "must" || rawShotDetails?.priority === "nice") {
+        priority = rawShotDetails.priority;
+    }
+    const shotDetails = rawShotDetails
+        ? {
+            camera: typeof rawShotDetails.camera === "string" ? rawShotDetails.camera : undefined,
+            lens: typeof rawShotDetails.lens === "string" ? rawShotDetails.lens : undefined,
+            movement: typeof rawShotDetails.movement === "string" ? rawShotDetails.movement : undefined,
+            framing: typeof rawShotDetails.framing === "string" ? rawShotDetails.framing : undefined,
+            angle: typeof rawShotDetails.angle === "string" ? rawShotDetails.angle : undefined,
+            lighting: typeof rawShotDetails.lighting === "string" ? rawShotDetails.lighting : undefined,
+            colorPalette:
+                typeof rawShotDetails.colorPalette === "string"
+                    ? rawShotDetails.colorPalette
+                    : undefined,
+            location: typeof rawShotDetails.location === "string" ? rawShotDetails.location : undefined,
+            priority,
+        }
+        : undefined;
+
+    const rawScriptRef = isRecord(value.scriptRef) ? value.scriptRef : null;
+    const scriptRef = rawScriptRef
+        ? {
+            sceneId:
+                typeof rawScriptRef.sceneId === "string" && rawScriptRef.sceneId
+                    ? rawScriptRef.sceneId
+                    : value.sceneId,
+            startChar:
+                Number.isFinite(Number(rawScriptRef.startChar)) && Number(rawScriptRef.startChar) >= 0
+                    ? Number(rawScriptRef.startChar)
+                    : undefined,
+            endChar:
+                Number.isFinite(Number(rawScriptRef.endChar)) && Number(rawScriptRef.endChar) >= 0
+                    ? Number(rawScriptRef.endChar)
+                    : undefined,
+        }
+        : undefined;
+
+    const rawDurationPlan = Number(value.durationPlanSec);
+    const rawSequenceIndex = Number(value.sequenceIndex);
+    const rawX = Number(value.x);
+    const rawY = Number(value.y);
+    const rawW = Number(value.w);
+    const rawH = Number(value.h);
+    const rawZ = Number(value.z);
+    const shotTypePreset =
+        value.shotTypePreset === "a-roll" ||
+        value.shotTypePreset === "b-roll" ||
+        value.shotTypePreset === "animated" ||
+        value.shotTypePreset === "custom"
+            ? value.shotTypePreset
+            : undefined;
+    const rawCustomLayout = isRecord(value.customLayout) ? value.customLayout : null;
+    const customLayout = rawCustomLayout
+        ? {
+            showVisual:
+                typeof rawCustomLayout.showVisual === "boolean"
+                    ? rawCustomLayout.showVisual
+                    : undefined,
+            showText:
+                typeof rawCustomLayout.showText === "boolean"
+                    ? rawCustomLayout.showText
+                    : undefined,
+            showNotes:
+                typeof rawCustomLayout.showNotes === "boolean"
+                    ? rawCustomLayout.showNotes
+                    : undefined,
+        }
+        : undefined;
+
+    return {
+        id: typeof value.id === "string" && value.id ? value.id : `sb-${Date.now()}-${idx}`,
+        sceneId: value.sceneId,
+        type: toStoryboardBlockType(value.type),
+        x: Number.isFinite(rawX) ? rawX : idx * 340,
+        y: Number.isFinite(rawY) ? rawY : 40,
+        w: Number.isFinite(rawW) ? Math.max(220, rawW) : 320,
+        h: Number.isFinite(rawH) ? Math.max(160, rawH) : 220,
+        z: Number.isFinite(rawZ) ? rawZ : undefined,
+        layoutMode: toDrawingLayoutMode(value.layoutMode),
+        scriptRef,
+        visualAssetId: typeof value.visualAssetId === "string" ? value.visualAssetId : undefined,
+        audioAssetId: typeof value.audioAssetId === "string" ? value.audioAssetId : undefined,
+        audioClipPath: typeof value.audioClipPath === "string" ? value.audioClipPath : undefined,
+        drawingData: typeof value.drawingData === "string" ? value.drawingData : undefined,
+        notes: typeof value.notes === "string" ? value.notes : "",
+        tags,
+        brollMarkers,
+        durationPlanSec:
+            Number.isFinite(rawDurationPlan) && rawDurationPlan >= 0 ? rawDurationPlan : undefined,
+        audioRef,
+        shotDetails,
+        shotTypePreset,
+        shotTypeCustom: typeof value.shotTypeCustom === "string" ? value.shotTypeCustom : undefined,
+        category: typeof value.category === "string" ? value.category : undefined,
+        blockKind: value.blockKind === "details" ? "details" : "primary",
+        detailForBlockId:
+            typeof value.detailForBlockId === "string" ? value.detailForBlockId : undefined,
+        isTextOnly: Boolean(value.isTextOnly),
+        customLayout,
+        sequenceIndex: Number.isFinite(rawSequenceIndex) ? rawSequenceIndex : undefined,
+        groupId: typeof value.groupId === "string" ? value.groupId : undefined,
+    };
+}
+
+function sanitizeStoryboardGroup(value: unknown, idx: number): StoryboardGroup | null {
+    if (!isRecord(value)) return null;
+    const blockIds = Array.isArray(value.blockIds)
+        ? value.blockIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+        : [];
+    return {
+        id: typeof value.id === "string" && value.id ? value.id : `group-${Date.now()}-${idx}`,
+        title: typeof value.title === "string" && value.title.trim() ? value.title : `Group ${idx + 1}`,
+        blockIds,
+        color: typeof value.color === "string" ? value.color : undefined,
+        collapsed: Boolean(value.collapsed),
+    };
+}
+
+function sanitizeStoryboardLink(value: unknown, idx: number): StoryboardLink | null {
+    if (!isRecord(value)) return null;
+    if (typeof value.fromBlockId !== "string" || typeof value.toBlockId !== "string") return null;
+    if (!value.fromBlockId || !value.toBlockId) return null;
+    return {
+        id: typeof value.id === "string" && value.id ? value.id : `link-${Date.now()}-${idx}`,
+        fromBlockId: value.fromBlockId,
+        toBlockId: value.toBlockId,
+        kind: value.kind === "dependency" ? "dependency" : "sequence",
+    };
+}
+
+function sanitizeStoryboardSelectionArea(value: unknown, idx: number): StoryboardSelectionArea | null {
+    if (!isRecord(value)) return null;
+    const rawX = Number(value.x);
+    const rawY = Number(value.y);
+    const rawW = Number(value.w);
+    const rawH = Number(value.h);
+    if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return null;
+    if (!Number.isFinite(rawW) || !Number.isFinite(rawH)) return null;
+    return {
+        id: typeof value.id === "string" && value.id ? value.id : `area-${Date.now()}-${idx}`,
+        x: rawX,
+        y: rawY,
+        w: Math.max(20, rawW),
+        h: Math.max(20, rawH),
+        title: typeof value.title === "string" ? value.title : undefined,
+        color: typeof value.color === "string" ? value.color : undefined,
+    };
+}
+
+function normalizeStoryboard(value: unknown): StoryboardModule | undefined {
+    if (!isRecord(value)) return undefined;
+
+    const blocks = Array.isArray(value.blocks)
+        ? value.blocks
+            .map((block, idx) => sanitizeStoryboardBlock(block, idx))
+            .filter((block): block is StoryboardBlock => Boolean(block))
+        : [];
+
+    const groups = Array.isArray(value.groups)
+        ? value.groups
+            .map((group, idx) => sanitizeStoryboardGroup(group, idx))
+            .filter((group): group is StoryboardGroup => Boolean(group))
+        : [];
+
+    const links = Array.isArray(value.links)
+        ? value.links
+            .map((link, idx) => sanitizeStoryboardLink(link, idx))
+            .filter((link): link is StoryboardLink => Boolean(link))
+        : [];
+
+    const selectionAreas = Array.isArray(value.selectionAreas)
+        ? value.selectionAreas
+            .map((area, idx) => sanitizeStoryboardSelectionArea(area, idx))
+            .filter((area): area is StoryboardSelectionArea => Boolean(area))
+        : [];
+
+    return {
+        version: 1,
+        modePreference: toStoryboardMode(value.modePreference),
+        drawingLayoutDefault: toDrawingLayoutMode(value.drawingLayoutDefault),
+        gridSnap: Boolean(value.gridSnap),
+        showLinks: value.showLinks !== false,
+        showScriptInDetails: Boolean(value.showScriptInDetails),
+        showMiniMap: value.showMiniMap !== false,
+        showTimelineStrip: value.showTimelineStrip !== false,
+        showSceneNumbers: value.showSceneNumbers !== false,
+        autoDurationFromAudioEnabled: Boolean(value.autoDurationFromAudioEnabled),
+        blocks,
+        groups,
+        links,
+        selectionAreas,
+    };
+}
+
+function sanitizeMasterScriptBlock(value: unknown, idx: number): MasterScriptBlock | null {
+    if (!isRecord(value)) return null;
+    const rawMeta = isRecord(value.headingMeta) ? value.headingMeta : null;
+    const headingMeta = rawMeta
+        ? {
+            locationType: toMasterScriptLocationType(rawMeta.locationType),
+            location: typeof rawMeta.location === "string" ? rawMeta.location : undefined,
+            timeOfDay: typeof rawMeta.timeOfDay === "string" ? rawMeta.timeOfDay : undefined,
+        }
+        : undefined;
+
+    return {
+        id: typeof value.id === "string" && value.id ? value.id : `ms-${Date.now()}-${idx}`,
+        type: toMasterScriptBlockType(value.type),
+        text: typeof value.text === "string" ? value.text : "",
+        headingMeta,
+        linkedSceneId: typeof value.linkedSceneId === "string" ? value.linkedSceneId : undefined,
+    };
+}
+
+function normalizeMasterScript(value: unknown): MasterScriptModule | undefined {
+    if (!isRecord(value)) return undefined;
+    if (typeof value.documentHtml === "string") {
+        return {
+            version: 2,
+            documentHtml: value.documentHtml,
+        };
+    }
+    const blocks = Array.isArray(value.blocks)
+        ? value.blocks
+            .map((block, idx) => sanitizeMasterScriptBlock(block, idx))
+            .filter((block): block is MasterScriptBlock => Boolean(block))
+        : [];
+
+    return {
+        version: 1,
+        blocks,
+    };
+}
+
 function normalizeProject(project: Project): Project {
     let audioTrack: AudioTrack | undefined;
     const rawTrack = project.audioTrack as unknown;
@@ -326,6 +643,9 @@ function normalizeProject(project: Project): Project {
         storyboardEnabled: project.storyboardEnabled ?? false,
         storyboardAspect: project.storyboardAspect ?? inferAspectFromTargetPlatform(project.targetPlatform),
         storyboardSafeZone: project.storyboardSafeZone ?? false,
+        storyboard: normalizeStoryboard((project as Project & { storyboard?: unknown }).storyboard),
+        masterScript: normalizeMasterScript((project as Project & { masterScript?: unknown }).masterScript),
+        notesPad: typeof project.notesPad === "string" ? project.notesPad : "",
         audioTrack,
     };
 }

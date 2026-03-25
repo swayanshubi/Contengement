@@ -1,16 +1,21 @@
 {
-  "name": "content-os",
+  "name": "contengement",
+  "description": "Contengement - Content management app",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron:dev": "cross-env HOST=127.0.0.1 PORT=3000 ELECTRON_DEV_URL=http://127.0.0.1:3000 node electron/dev-runner.cjs",
+    "electron:start": "cross-env NODE_ENV=production electron .",
+    "electron:dist": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
     "lucide-react": "^0.460.0",
-    "next": "14.2.21",
+    "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "uuid": "^9.0.1",
@@ -22,10 +27,45 @@
     "@types/react-dom": "^18.3.1",
     "@types/uuid": "^9.0.7",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.21",
+    "eslint-config-next": "^14.2.35",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.contengement.app",
+    "productName": "Contengement",
+    "icon": "electron/assets/icon.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "public/**/*",
+      ".next/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "electron/assets/icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "contengement-setup-${version}.${ext}"
+    },
+    "nsis": {
+      "installerIcon": "electron/assets/icon.ico",
+      "uninstallerIcon": "electron/assets/icon.ico",
+      "installerHeaderIcon": "electron/assets/icon.ico",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

@@ -1,0 +1,27 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="chStroke" x1="10" y1="96" x2="118" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3A145F"/>
+      <stop offset="1" stop-color="#9D7AC9"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M64 8L108 34V56" stroke="url(#chStroke)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M108 72V94L64 120L20 94V56L64 28L95 47" stroke="url(#chStroke)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M64 44L38 60V90L64 106L90 90V82" stroke="url(#chStroke)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M58 50C53 45 46 49 46 56C46 61 49 64 55 67C62 71 62 79 55 83C49 86 42 82 42 76" stroke="url(#chStroke)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M66 76C73 76 80 73 85 68" stroke="url(#chStroke)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M72 64C74 62 74 58 72 56C70 54 67 54 65 56C63 58 63 62 65 64C67 66 70 66 72 64Z" stroke="url(#chStroke)" stroke-width="4"/>
+
+  <path d="M24 36L34 30H44L49 39L44 48H34L24 42V36Z" stroke="url(#chStroke)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M44 24L50 18H60L65 27L60 36H50L44 30V24Z" stroke="url(#chStroke)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M52 40L58 34H68L73 43L68 52H58L52 46V40Z" stroke="url(#chStroke)" stroke-width="4" stroke-linejoin="round"/>
+
+  <circle cx="62" cy="14" r="4" fill="url(#chStroke)"/>
+  <circle cx="64" cy="114" r="4" fill="url(#chStroke)"/>
+  <circle cx="90" cy="96" r="4" fill="url(#chStroke)"/>
+  <circle cx="92" cy="56" r="4" fill="url(#chStroke)"/>
+  <circle cx="78" cy="70" r="3" fill="url(#chStroke)"/>
+</svg>

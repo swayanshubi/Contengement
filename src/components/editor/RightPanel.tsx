@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Asset, AssetType, Scene } from "@/lib/types";
 import GoogleDrivePicker, { type DriveFile } from "./GoogleDrivePicker";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface RightPanelProps {
     assets: Asset[];
@@ -53,6 +54,7 @@ export default function RightPanel({
     const [filter, setFilter] = useState<string>("all");
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [dragOverType, setDragOverType] = useState<AssetType | null>(null);
+    const [assetToDelete, setAssetToDelete] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const filtered =
@@ -95,7 +97,6 @@ export default function RightPanel({
     }
 
     async function deleteAsset(assetId: string) {
-        if (!confirm("Delete this asset?")) return;
         await fetch(`/api/projects/${projectId}/assets/${assetId}`, {
             method: "DELETE",
         });
@@ -131,7 +132,7 @@ export default function RightPanel({
     function handleAssetDragStart(e: React.DragEvent, asset: Asset) {
         e.dataTransfer.setData("text/plain", asset.id);
         e.dataTransfer.setData(
-            "application/x-content-os-asset",
+            "application/x-contengement-asset",
             JSON.stringify({ assetId: asset.id, projectId: asset.projectId, type: asset.type })
         );
         e.dataTransfer.effectAllowed = "move";
@@ -140,7 +141,7 @@ export default function RightPanel({
     function handleTypeDrop(e: React.DragEvent, targetType: AssetType) {
         e.preventDefault();
         setDragOverType(null);
-        const raw = e.dataTransfer.getData("application/x-content-os-asset");
+        const raw = e.dataTransfer.getData("application/x-contengement-asset");
         if (!raw) return;
         try {
             const parsed = JSON.parse(raw) as { assetId?: string; type?: AssetType };
@@ -276,7 +277,7 @@ export default function RightPanel({
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        deleteAsset(asset.id);
+                                        setAssetToDelete(asset.id);
                                     }}
                                     className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/10 rounded transition-all"
                                 >
@@ -355,6 +356,20 @@ export default function RightPanel({
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={Boolean(assetToDelete)}
+                title="Delete asset?"
+                message="This removes the uploaded file from this project."
+                confirmLabel="Delete"
+                danger
+                onCancel={() => setAssetToDelete(null)}
+                onConfirm={async () => {
+                    if (!assetToDelete) return;
+                    const id = assetToDelete;
+                    setAssetToDelete(null);
+                    await deleteAsset(id);
+                }}
+            />
         </aside>
     );
 }

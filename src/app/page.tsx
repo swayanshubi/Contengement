@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
     Plus,
     Film,
@@ -9,15 +10,16 @@ import {
     LayoutList,
     Trash2,
     Sparkles,
-    Video,
 } from "lucide-react";
 import type { Project } from "@/lib/types";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function DashboardPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
     const [newTitle, setNewTitle] = useState("");
+    const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
     useEffect(() => {
         fetchProjects();
@@ -45,24 +47,37 @@ export default function DashboardPage() {
     async function deleteProject(id: string, e: React.MouseEvent) {
         e.preventDefault();
         e.stopPropagation();
-        if (!confirm("Delete this project and all its data?")) return;
+        setProjectToDelete(id);
+    }
+
+    async function confirmDeleteProject() {
+        if (!projectToDelete) return;
+        const id = projectToDelete;
+        setProjectToDelete(null);
         await fetch(`/api/projects/${id}`, { method: "DELETE" });
         fetchProjects();
     }
 
     return (
-        <div className="min-h-screen bg-[var(--bg-primary)]">
+        <div className="min-h-full bg-[var(--bg-primary)]">
             {/* ─── Header ─── */}
             <header className="border-b border-border/50">
                 <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-accent/20">
-                            <Video className="w-5 h-5 text-white" />
+                        <div className="w-9 h-9 rounded-xl bg-surface-elevated border border-border/40 flex items-center justify-center shadow-lg shadow-accent/20 overflow-hidden">
+                            <Image
+                                src="/contengement-mascot.svg"
+                                alt="Contengement mascot"
+                                width={36}
+                                height={36}
+                                className="w-9 h-9 object-contain p-0.5"
+                                priority
+                            />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold gradient-text">Content OS</h1>
+                            <h1 className="text-lg font-bold gradient-text">Contengement</h1>
                             <p className="text-[11px] text-zinc-500 tracking-wide">
-                                Scene-Based Video Production
+                                Content Management
                             </p>
                         </div>
                     </div>
@@ -107,7 +122,7 @@ export default function DashboardPage() {
                             <Link
                                 key={project.id}
                                 href={`/project/${project.id}`}
-                                className="group glass-panel p-5 hover:border-accent/30 hover:shadow-lg hover:shadow-accent/5 transition-all duration-300"
+                                className="block group glass-panel p-5 hover:border-accent/30 hover:shadow-lg hover:shadow-accent/5 transition-all duration-300"
                             >
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-2.5">
@@ -192,6 +207,15 @@ export default function DashboardPage() {
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={Boolean(projectToDelete)}
+                title="Delete project?"
+                message="This will remove the project and all related data."
+                confirmLabel="Delete"
+                danger
+                onCancel={() => setProjectToDelete(null)}
+                onConfirm={confirmDeleteProject}
+            />
         </div>
     );
 }

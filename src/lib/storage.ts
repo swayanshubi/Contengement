@@ -2,8 +2,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const DEFAULT_APP_DIR_NAME = "Content OS";
-const LEGACY_DIR_NAME = ".content-os";
+const DEFAULT_APP_DIR_NAME = "Contengement";
+const LEGACY_APP_DIR_NAMES: string[] = [];
+const LEGACY_DIR_NAMES = [".contengement"];
 const MIGRATION_MARKER_FILE = "migration-from-legacy.json";
 const STORAGE_META_FILE = "storage-meta.json";
 
@@ -29,7 +30,7 @@ let cachedLayout: StorageLayout | null = null;
 let didBootstrap = false;
 
 function getConfiguredAppDirName(): string {
-    const configured = process.env.CONTENT_OS_APP_DIR_NAME?.trim();
+    const configured = process.env.CONTENGEMENT_APP_DIR_NAME?.trim();
     return configured || DEFAULT_APP_DIR_NAME;
 }
 
@@ -44,11 +45,11 @@ function resolveUserDataBaseDir(): string {
 }
 
 export function getLegacyStorageRootDir(): string {
-    return path.join(process.cwd(), LEGACY_DIR_NAME);
+    return path.join(process.cwd(), LEGACY_DIR_NAMES[0]);
 }
 
 function resolveStorageRootDir(): string {
-    const envOverride = process.env.CONTENT_OS_DATA_DIR?.trim();
+    const envOverride = process.env.CONTENGEMENT_DATA_DIR?.trim();
     if (envOverride) return path.resolve(envOverride);
     return path.join(resolveUserDataBaseDir(), getConfiguredAppDirName());
 }
@@ -83,11 +84,11 @@ function hasCurrentData(layout: StorageLayout): boolean {
     return hasEntries(layout.projectsDir) || hasEntries(layout.uploadsDir);
 }
 
-function hasLegacyData(legacyRoot: string): boolean {
-    const legacyProjectsDir = path.join(legacyRoot, "projects");
-    const legacyUploadsDir = path.join(legacyRoot, "uploads");
-    const legacyIndexFile = path.join(legacyRoot, "projects.json");
-    return hasEntries(legacyProjectsDir) || hasEntries(legacyUploadsDir) || fs.existsSync(legacyIndexFile);
+function hasStorageData(rootDir: string): boolean {
+    const projectsDir = path.join(rootDir, "projects");
+    const uploadsDir = path.join(rootDir, "uploads");
+    const indexFile = path.join(rootDir, "projects.json");
+    return hasEntries(projectsDir) || hasEntries(uploadsDir) || fs.existsSync(indexFile);
 }
 
 function copyDirContents(srcDir: string, destDir: string) {
@@ -109,28 +110,46 @@ function writeMigrationMarker(layout: StorageLayout, legacyRoot: string) {
     fs.writeFileSync(layout.migrationMarkerPath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
+function getLegacyAppDataRoots(layout: StorageLayout): string[] {
+    const baseDir = resolveUserDataBaseDir();
+    return LEGACY_APP_DIR_NAMES.map((name) => path.join(baseDir, name)).filter(
+        (candidate) => path.resolve(candidate) !== path.resolve(layout.rootDir)
+    );
+}
+
+function migrateFromRoot(layout: StorageLayout, sourceRoot: string): boolean {
+    if (!fs.existsSync(sourceRoot)) return false;
+    if (path.resolve(sourceRoot) === path.resolve(layout.rootDir)) return false;
+    if (!hasStorageData(sourceRoot)) return false;
+    if (hasCurrentData(layout)) return false;
+
+    try {
+        copyDirContents(path.join(sourceRoot, "projects"), layout.projectsDir);
+        copyDirContents(path.join(sourceRoot, "uploads"), layout.uploadsDir);
+
+        const sourceIndexPath = path.join(sourceRoot, "projects.json");
+        const currentIndexPath = path.join(layout.rootDir, "projects.json");
+        if (fs.existsSync(sourceIndexPath) && !fs.existsSync(currentIndexPath)) {
+            fs.cpSync(sourceIndexPath, currentIndexPath);
+        }
+
+        writeMigrationMarker(layout, sourceRoot);
+        return true;
+    } catch (error) {
+        console.error("Legacy storage migration failed", error);
+        return false;
+    }
+}
+
 function migrateFromLegacyIfNeeded(layout: StorageLayout) {
     if (fs.existsSync(layout.migrationMarkerPath)) return;
 
-    const legacyRoot = getLegacyStorageRootDir();
-    if (!fs.existsSync(legacyRoot)) return;
-    if (path.resolve(legacyRoot) === path.resolve(layout.rootDir)) return;
-    if (!hasLegacyData(legacyRoot)) return;
-    if (hasCurrentData(layout)) return;
-
-    try {
-        copyDirContents(path.join(legacyRoot, "projects"), layout.projectsDir);
-        copyDirContents(path.join(legacyRoot, "uploads"), layout.uploadsDir);
-
-        const legacyIndexPath = path.join(legacyRoot, "projects.json");
-        const currentIndexPath = path.join(layout.rootDir, "projects.json");
-        if (fs.existsSync(legacyIndexPath) && !fs.existsSync(currentIndexPath)) {
-            fs.cpSync(legacyIndexPath, currentIndexPath);
+    const localLegacyRoots = LEGACY_DIR_NAMES.map((dirName) => path.join(process.cwd(), dirName));
+    const migrationSources = [...localLegacyRoots, ...getLegacyAppDataRoots(layout)];
+    for (const sourceRoot of migrationSources) {
+        if (migrateFromRoot(layout, sourceRoot)) {
+            return;
         }
-
-        writeMigrationMarker(layout, legacyRoot);
-    } catch (error) {
-        console.error("Legacy storage migration failed", error);
     }
 }
 
